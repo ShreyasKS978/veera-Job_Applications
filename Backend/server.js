@@ -11,7 +11,7 @@ const sharp = require('sharp');
 const PDFDocument = require('pdfkit');
 
 const app = express();
-const port = 3036;
+const port = 3038;
 
 // PostgreSQL configuration
 const pool = new Pool({
@@ -141,7 +141,7 @@ app.post('/api/applications', applicationUpload.fields([
             status: 'Pending'
         };
 
-        const baseUrl = `http://15.206.82.188:${port}/Uploads/`;
+        const baseUrl = `http://localhost:${port}/Uploads/`;
         if (files.resume) {
             formData.documents.resume = {
                 name: files.resume[0].originalname,
@@ -318,77 +318,88 @@ app.patch('/api/applications/:id', async (req, res) => {
 // Upload offer documents
 app.post('/api/applications/upload', offerUpload.array('files', 10), async (req, res) => {
     try {
-        const { applicationId } = req.body;
-        const files = req.files;
+        console.log('Upload request received:', req.body); // Debug log
+        
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No files were uploaded' });
+        }
 
+        const { applicationId } = req.body;
+        console.log('Application ID:', applicationId); // Debug log
+        
         if (!applicationId) {
             return res.status(400).json({ error: 'Application ID is required' });
         }
 
-        if (!files || files.length === 0) {
-            return res.status(400).json({ error: 'No files uploaded' });
-        }
-
-        const appCheck = await pool.query('SELECT status FROM applications WHERE id = $1', [applicationId]);
+        // Check if application exists and is accepted
+        const appCheck = await pool.query(
+            'SELECT status FROM applications WHERE id = $1', 
+            [applicationId]
+        );
+        
         if (appCheck.rows.length === 0) {
             return res.status(404).json({ error: 'Application not found' });
         }
+        
         if (appCheck.rows[0].status !== 'Accepted') {
-            return res.status(403).json({ error: 'Files can only be uploaded for accepted applications' });
+            return res.status(400).json({ 
+                error: 'Files can only be uploaded for accepted applications' 
+            });
         }
 
-        const existingFilesResult = await pool.query(
-            'SELECT id, path FROM application_files WHERE application_id = $1',
-            [applicationId]
-        );
-        for (const file of existingFilesResult.rows) {
-            const localPath = path.join(__dirname, 'Uploads', path.basename(file.path));
-            try {
-                await fs.unlink(localPath);
-            } catch (fsError) {
-                if (fsError.code !== 'ENOENT') {
-                    throw fsError;
-                }
-            }
-            await pool.query('DELETE FROM application_files WHERE id = $1', [file.id]);
-        }
-
-        const baseUrl = `http://15.206.82.188:${port}/Uploads/`;
+        // Process files
+        const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
         const fileRecords = [];
 
-        for (const file of files) {
-            const fileBuffer = await fs.readFile(file.path);
-            const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-
-            const fileId = uuidv4();
+        for (const file of req.files) {
             const fileRecord = {
-                id: fileId,
-                application_id: parseInt(applicationId),
+                id: uuidv4(),
+                application_id: applicationId,
                 name: file.originalname,
                 path: `${baseUrl}${file.filename}`,
                 size: file.size,
                 mime_type: file.mimetype,
-                hash: hash
+                hash: crypto.createHash('sha256')
+                          .update(await fs.readFile(file.path))
+                          .digest('hex')
             };
 
             await pool.query(
-                'INSERT INTO application_files (id, application_id, name, path, size, mime_type, hash) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                [fileId, fileRecord.application_id, fileRecord.name, fileRecord.path, fileRecord.size, fileRecord.mime_type, fileRecord.hash]
+                `INSERT INTO application_files 
+                (id, application_id, name, path, size, mime_type, hash) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                Object.values(fileRecord)
             );
 
             fileRecords.push(fileRecord);
         }
 
-        res.status(201).json({ message: 'Files uploaded successfully', files: fileRecords });
+        res.status(201).json({ 
+            message: 'Files uploaded successfully', 
+            files: fileRecords 
+        });
     } catch (error) {
-        console.error('Error uploading files:', error);
-        let errorMessage = 'Failed to upload files';
-        if (error.message.includes('LIMIT_FILE_SIZE')) {
-            errorMessage = 'One or more files exceed the 10MB limit';
-        } else if (error.message.includes('Only PDF, DOCX, JPG, JPEG, and PNG files are allowed')) {
-            errorMessage = error.message;
-        }
-        res.status(500).json({ error: errorMessage });
+        console.error('Upload error:', error);
+        
+        // Clean up any uploaded files if error occurred
+// Delete any uploaded temp files that you don’t need:
+if (req.files?.length) {
+  await Promise.all(
+    req.files.map(async ({ path }) => {
+      try {
+        await fs.unlink(path);          // ← promise version
+      } catch (err) {                   // log but don’t crash the request
+        console.error('Cleanup error:', err);
+      }
+    })
+  );
+}
+
+        
+        res.status(500).json({ 
+            error: 'File upload failed',
+            details: error.message 
+        });
     }
 });
 
@@ -514,7 +525,7 @@ app.delete('/api/applications/files/:fileId', async (req, res) => {
 app.listen(port, async () => {
     try {
         await pool.connect();
-        console.log(`Server running on http://15.206.82.188:${port}`);
+        console.log(`Server running on http://15.207.112.17:${port}`);
     } catch (error) {
         console.error('Failed to connect to database:', error);
         process.exit(1);
