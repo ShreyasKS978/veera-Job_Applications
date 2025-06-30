@@ -525,7 +525,7 @@ app.delete('/api/applications/files/:fileId', async (req, res) => {
 app.listen(port, async () => {
     try {
         await pool.connect();
-        console.log(`Server running on http://15.207.112.17:${port}`);
+        console.log(`Server running on http://43.205.215.177:${port}`);
     } catch (error) {
         console.error('Failed to connect to database:', error);
         process.exit(1);
