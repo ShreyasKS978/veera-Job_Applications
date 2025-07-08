@@ -5,7 +5,7 @@ services:
     container_name: veera_job_backend
     build: ./Backend
     ports:
-      - "3039:3039"
+      - "3038:3038"
     depends_on:
       - postgres
     volumes:
