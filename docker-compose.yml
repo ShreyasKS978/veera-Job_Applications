@@ -5,7 +5,7 @@ services:
     container_name: veera_job_backend
     build: ./Backend
     ports:
-      - "3038:3038"
+      - "3036:3036"
     depends_on:
       - postgres
     volumes:
@@ -21,25 +21,25 @@ services:
     container_name: veera_job_frontend
     build: ./Frontend
     ports:
-      - "8132:80"
+      - "8126:80"
 
   hr:
     container_name: veera_job_hr
     build: ./HR
     ports:
-      - "8133:80"
+      - "8127:80"
 
   view_offer:
     container_name: veera_job_view_offer
     build: ./View_offer
     ports:
-      - "8134:80"
+      - "8128:80"
 
   postgres:
     container_name: veera_job_postgres
     image: postgres:13
     ports:
-      - "6599:5432"
+      - "6598:5432"
     environment:
       POSTGRES_DB: job_applications
       POSTGRES_USER: postgres
