@@ -141,7 +141,7 @@ app.post('/api/applications', applicationUpload.fields([
             status: 'Pending'
         };
 
-        const baseUrl = `http://localhost:${port}/Uploads/`;
+        const baseUrl = `http://3.108.42.202:${port}/Uploads/`;
         if (files.resume) {
             formData.documents.resume = {
                 name: files.resume[0].originalname,
